@@ -2,7 +2,6 @@ package com.fortysevendeg.tagless.sample
 
 import java.util.UUID
 
-import cats.Monad
 import cats.data.Validated.{Invalid, Valid}
 import cats.data.{NonEmptyList, ValidatedNel}
 import cats.effect.IO
@@ -24,8 +23,7 @@ class RequestServiceSpec extends FunSuite {
   def validationServiceBuild: IO[ValidationService[IO]]                         = ???
 
   def requestServiceBuild(implicit httClient: HTTPClient[IO]): IO[RequestService[IO]] =
-    (encryptionServiceBuild, httpServiceBuild, validationServiceBuild).mapN(
-      RequestService.build[IO](Monad[IO], _, _, _))
+    (encryptionServiceBuild, httpServiceBuild, validationServiceBuild).mapN(RequestService.build[IO])
 
   val validPrefs: String              = "{ notifications: false }"
   val validHTTPUser: HTTPUserResponse = HTTPUserResponse("Norma", 34, 'F', "173x62")

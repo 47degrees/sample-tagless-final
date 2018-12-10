@@ -17,7 +17,7 @@ trait RequestService[F[_]] {
 
 object RequestService {
 
-  def build[F[_]: Monad](implicit E: EncryptionService[F], H: HTTPService[F], V: ValidationService[F]): RequestService[F] =
+  def build[F[_]: Monad](E: EncryptionService[F], H: HTTPService[F], V: ValidationService[F]): RequestService[F] =
     new RequestService[F] {
       def makeRequest(id: UUID, prefs: String): F[ValidatedNel[ValidationError, UserInformation]] =
         for {
