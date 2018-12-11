@@ -18,9 +18,9 @@ class RequestServiceSpec extends FunSuite {
       IO.raiseError(new RuntimeException("Test exception"))
   }
 
-  def httpServiceBuild(implicit httClient: HTTPClient[IO]): IO[HTTPService[IO]] = ???
-  def encryptionServiceBuild: IO[EncryptionService[IO]]                         = ???
-  def validationServiceBuild: IO[ValidationService[IO]]                         = ???
+  def httpServiceBuild(implicit httpClient: HTTPClient[IO]): IO[HTTPService[IO]]  = HTTPService.build[IO](httpClient)
+  def encryptionServiceBuild: IO[EncryptionService[IO]]                           = EncryptionService.build[IO]
+  def validationServiceBuild: IO[ValidationService[IO]]                           = ValidationService.build[IO]
 
   def requestServiceBuild(implicit httClient: HTTPClient[IO]): IO[RequestService[IO]] =
     (encryptionServiceBuild, httpServiceBuild, validationServiceBuild).mapN(RequestService.build[IO])
