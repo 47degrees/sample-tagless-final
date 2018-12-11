@@ -63,5 +63,5 @@ object ValidationService {
     }
 
   def build[F[_]](implicit S: Sync[F]): F[ValidationService[F]] =
-    S.delay(LoggerFactory.getLogger("EncryptionService")).map(ValidationService(_))
+    S.delay(LoggerFactory.getLogger("ValidationService")).map(ValidationService(_))
 }
