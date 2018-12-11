@@ -24,5 +24,5 @@ object HTTPService {
     }
 
   def build[F[_]](client: HTTPClient[F])(implicit S: Sync[F]) =
-    S.delay(LoggerFactory.getLogger("EncryptionService")).map(HTTPService(client, _))
+    S.delay(LoggerFactory.getLogger("HTTPService")).map(HTTPService(client, _))
 }
