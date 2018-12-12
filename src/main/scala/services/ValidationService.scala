@@ -17,16 +17,12 @@ object ValidationService {
 
   type ValidationResult[A] = ValidatedNec[ValidationError, A]
 
-  private def logErrors[F[_]: Sync](logger: Logger)(errors: NonEmptyChain[ValidationError]): F[Unit] = Sync[F].delay(
-    errors.toList.foreach(e =>
-      logger.error(
-        e match {
-          case NotAdultError => "Invalid age"
-          case InvalidHeightAndWeight => "Invalid height/weight format"
-          case InvalidGenderError => "Invalid gender"
-          case _ => "Unknown error"
-        }))
-    )
+  private def logErrors[F[_]: Sync](logger: Logger)(errors: NonEmptyChain[ValidationError]): F[Unit] =
+    errors.toList.map {
+      case NotAdultError => "Invalid age"
+      case InvalidHeightAndWeight => "Invalid height/weight format"
+      case InvalidGenderError => "Invalid gender"
+    }.map(logger.error(_)).traverse(Sync[F].delay(_)).void
 
   private def validateAgeLogged(age: Int): ValidationResult[Int] =
     Either.cond[ValidationError, Int](age >= 18, age, NotAdultError)
@@ -58,9 +54,9 @@ object ValidationService {
             UserInformation(name, validAge, validGender, validHeight, validWeight)
         }.fold(
           e => logErrors(logger)(e).flatMap {
-            _ => Sync[F].delay(Validated.invalid(e.toNonEmptyList))
+            _ => Sync[F].pure(Validated.invalid(e.toNonEmptyList))
           },
-          v => Sync[F].delay(Validated.valid(v))
+          v => Sync[F].pure(Validated.valid(v))
       )
     }
   }
