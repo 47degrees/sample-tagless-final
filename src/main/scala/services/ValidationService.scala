@@ -1,7 +1,7 @@
 package com.fortysevendeg.tagless.sample
 package services
 
-import cats.data.{ValidatedNec, ValidatedNel}
+import cats.data._
 import cats.effect.Sync
 import cats.implicits._
 import com.fortysevendeg.tagless.sample.models._
@@ -17,38 +17,33 @@ object ValidationService {
 
   type ValidationResult[A] = ValidatedNec[ValidationError, A]
 
-  private def toGender(gender: Char): Either[ValidationError, Gender] = gender match {
-    case 'M' => Either.right(Male)
-    case 'F' => Either.right(Female)
-    case _ => Either.left(InvalidGenderError)
-  }
+  private def logErrors[F[_]: Sync](logger: Logger)(errors: NonEmptyChain[ValidationError]): F[Unit] = Sync[F].delay(
+    errors.toList.foreach(e =>
+      logger.error(
+        e match {
+          case NotAdultError => "Invalid age"
+          case InvalidHeightAndWeight => "Invalid height/weight format"
+          case InvalidGenderError => "Invalid gender"
+          case _ => "Unknown error"
+        }))
+    )
 
-  def validateAgeLogged[F[_]: Sync](age: Int)(logger: Logger): F[ValidationResult[Int]] = Sync[F].delay {
+  private def validateAgeLogged(age: Int): ValidationResult[Int] =
     Either.cond[ValidationError, Int](age >= 18, age, NotAdultError)
       .toValidatedNec
-  }.handleErrorWith { _ =>
-    Sync[F].delay(logger.error("Invalid date found"))
-      .flatMap(_ => Sync[F].raiseError(EncryptionError))
-  }
 
-  def validateHeightWeight[F[_]: Sync](source: String)(logger: Logger): F[ValidationResult[(Int, Int)]] = Sync[F].delay {
+  private def validateHeightWeight(source: String): ValidationResult[(Int, Int)] =
     (for {
       ints <- Either.catchNonFatal(source.split('x').map(_.toInt)).leftMap(e => InvalidHeightAndWeight)
       dimensions <- Either.cond[ValidationError, (Int, Int)](ints.length == 2, (ints(0), ints(1)), InvalidHeightAndWeight)
     } yield dimensions)
       .toValidatedNec
-  }.handleErrorWith { _ =>
-    Sync[F].delay(logger.error("Invalid height/weight format"))
-      .flatMap(_ => Sync[F].raiseError(EncryptionError))
-  }
 
-  def validateGenderLogged[F[_]: Sync](gender: Char)(logger: Logger): F[ValidationResult[Gender]] = Sync[F].delay {
-    toGender(gender)
-      .toValidatedNec
-  }.handleErrorWith { _ =>
-    Sync[F].delay(logger.error("Invalid gender found"))
-      .flatMap(_ => Sync[F].raiseError(EncryptionError))
-  }
+  private def validateGenderLogged(gender: Char): ValidationResult[Gender] = (gender match {
+    case 'M' => Either.right(Male)
+    case 'F' => Either.right(Female)
+    case _ => Either.left(InvalidGenderError)
+  }).toValidatedNec
 
   def build[F[_]](implicit S: Sync[F]): F[ValidationService[F]] =
     S.delay(LoggerFactory.getLogger("ValidationService")).map { logger =>
@@ -56,16 +51,17 @@ object ValidationService {
     }
 
   class ValidationServiceImpl[F[_]: Sync](logger: Logger) extends ValidationService[F] {
-    override def validateUser(name: String, age: Int, gender: Char, heightAndWeight: String): F[ValidatedNel[ValidationError, UserInformation]] =
-      for {
-          ageValidation <- validateAgeLogged(age)(logger)
-          dimensionsValidation <- validateHeightWeight(heightAndWeight)(logger)
-          genderValidation <- validateGenderLogged(gender)(logger)
-        } yield {
-          (ageValidation, dimensionsValidation, genderValidation).mapN { case (validAge, (validHeight, validWeight), validGender) =>
+    override def validateUser(name: String, age: Int, gender: Char, heightAndWeight: String): F[ValidatedNel[ValidationError, UserInformation]] = {
+      (validateAgeLogged(age), validateHeightWeight(heightAndWeight), validateGenderLogged(gender))
+        .mapN {
+          case (validAge, (validHeight, validWeight), validGender) =>
             UserInformation(name, validAge, validGender, validHeight, validWeight)
-          }
-            .leftMap(_.toNonEmptyList)
-        }
-      }
+        }.fold(
+          e => logErrors(logger)(e).flatMap {
+            _ => Sync[F].delay(Validated.invalid(e.toNonEmptyList))
+          },
+          v => Sync[F].delay(Validated.valid(v))
+      )
+    }
+  }
 }
