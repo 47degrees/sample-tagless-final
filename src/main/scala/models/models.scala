@@ -6,9 +6,9 @@ import scala.util.control.NoStackTrace
 case object EncryptionError extends RuntimeException with NoStackTrace
 
 sealed trait ValidationError extends Product with Serializable
-case object NotAdultError extends ValidationError
-case object InvalidGenderError extends ValidationError
-case object InvalidHeightAndWeight extends ValidationError
+case class NotAdultError(source: Int) extends ValidationError
+case class InvalidGenderError(source: Char) extends ValidationError
+case class InvalidHeightAndWeight(source: String) extends ValidationError
 
 sealed trait Gender extends Product with Serializable
 case object Female extends Gender

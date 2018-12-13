@@ -72,7 +72,7 @@ class RequestServiceSpec extends FunSuite {
     val result: ValidatedNel[ValidationError, UserInformation] =
       requestServiceBuild.flatMap(_.makeRequest(UUID.randomUUID(), validPrefs)).unsafeRunSync()
 
-    assertResult(Invalid(NonEmptyList.one(NotAdultError)))(result)
+    assertResult(Invalid(NonEmptyList.one(NotAdultError(17))))(result)
   }
 
   test("raise a InvalidGenderError if the user gender is invalid") {
@@ -85,7 +85,7 @@ class RequestServiceSpec extends FunSuite {
     val result: ValidatedNel[ValidationError, UserInformation] =
       requestServiceBuild.flatMap(_.makeRequest(UUID.randomUUID(), validPrefs)).unsafeRunSync()
 
-    assertResult(Invalid(NonEmptyList.one(InvalidGenderError)))(result)
+    assertResult(Invalid(NonEmptyList.one(InvalidGenderError('X'))))(result)
   }
 
   test("raise a InvalidHeightAndWeight if the user heightAndWeight is invalid") {
@@ -98,7 +98,7 @@ class RequestServiceSpec extends FunSuite {
     val result: ValidatedNel[ValidationError, UserInformation] =
       requestServiceBuild.flatMap(_.makeRequest(UUID.randomUUID(), validPrefs)).unsafeRunSync()
 
-    assertResult(Invalid(NonEmptyList.one(InvalidHeightAndWeight)))(result)
+    assertResult(Invalid(NonEmptyList.one(InvalidHeightAndWeight("xxx"))))(result)
   }
 
   test("raise all validation errors if the user has different invalid data") {
@@ -111,7 +111,7 @@ class RequestServiceSpec extends FunSuite {
     val result: ValidatedNel[ValidationError, UserInformation] =
       requestServiceBuild.flatMap(_.makeRequest(UUID.randomUUID(), validPrefs)).unsafeRunSync()
 
-    assertResult(Invalid(Set(NotAdultError, InvalidGenderError, InvalidHeightAndWeight)))(
+    assertResult(Invalid(Set(NotAdultError(17), InvalidGenderError('X'), InvalidHeightAndWeight("xxx"))))(
       result.leftMap(_.toList.toSet))
   }
 

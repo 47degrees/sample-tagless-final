@@ -19,26 +19,26 @@ object ValidationService {
 
   private def logErrors[F[_]: Sync](logger: Logger)(errors: NonEmptyChain[ValidationError]): F[Unit] =
     errors.toList.map {
-      case NotAdultError => "Invalid age"
-      case InvalidHeightAndWeight => "Invalid height/weight format"
-      case InvalidGenderError => "Invalid gender"
+      case NotAdultError(source) => s"Invalid age: $source"
+      case InvalidHeightAndWeight(source) => s"Invalid height/weight format: $source"
+      case InvalidGenderError(source) => s"Invalid gender: $source"
     }.map(logger.error(_)).traverse(Sync[F].delay(_)).void
 
   private def validateAgeLogged(age: Int): ValidationResult[Int] =
-    Either.cond[ValidationError, Int](age >= 18, age, NotAdultError)
+    Either.cond[ValidationError, Int](age >= 18, age, NotAdultError(age))
       .toValidatedNec
 
   private def validateHeightWeight(source: String): ValidationResult[(Int, Int)] =
     (for {
-      ints <- Either.catchNonFatal(source.split('x').map(_.toInt)).leftMap(e => InvalidHeightAndWeight)
-      dimensions <- Either.cond[ValidationError, (Int, Int)](ints.length == 2, (ints(0), ints(1)), InvalidHeightAndWeight)
+      ints <- Either.catchNonFatal(source.split('x').map(_.toInt)).leftMap(e => InvalidHeightAndWeight(source))
+      dimensions <- Either.cond[ValidationError, (Int, Int)](ints.length == 2, (ints(0), ints(1)), InvalidHeightAndWeight(source))
     } yield dimensions)
       .toValidatedNec
 
   private def validateGenderLogged(gender: Char): ValidationResult[Gender] = (gender match {
     case 'M' => Either.right(Male)
     case 'F' => Either.right(Female)
-    case _ => Either.left(InvalidGenderError)
+    case _ => Either.left(InvalidGenderError(gender))
   }).toValidatedNec
 
   def build[F[_]](implicit S: Sync[F]): F[ValidationService[F]] =
