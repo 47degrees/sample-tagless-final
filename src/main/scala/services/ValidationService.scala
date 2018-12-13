@@ -15,31 +15,43 @@ trait ValidationService[F[_]] {
 
 object ValidationService {
 
-  type ValidationResult[A] = ValidatedNec[ValidationError, A]
+  type ValidationResult[A] = ValidatedNel[ValidationError, A]
 
-  private def logErrors[F[_]: Sync](logger: Logger)(errors: NonEmptyChain[ValidationError]): F[Unit] =
-    errors.toList.map {
-      case NotAdultError(source) => s"Invalid age: $source"
-      case InvalidHeightAndWeight(source) => s"Invalid height/weight format: $source"
-      case InvalidGenderError(source) => s"Invalid gender: $source"
-    }.map(logger.error(_)).traverse(Sync[F].delay(_)).void
+  private def validateAgeLogged[F[_]: Sync](logger: Logger)(age: Int): F[ValidationResult[Int]] =
+    Either.cond[ValidationError, Int](age >= 18, age, NotAdultError).fold(
+      e => Sync[F].delay {
+        logger.error(s"Invalid age: $age")
+        e.invalidNel
+      },
+      v => Sync[F].pure(v.validNel)
+    )
 
-  private def validateAgeLogged(age: Int): ValidationResult[Int] =
-    Either.cond[ValidationError, Int](age >= 18, age, NotAdultError(age))
-      .toValidatedNec
-
-  private def validateHeightWeight(source: String): ValidationResult[(Int, Int)] =
+  private def validateHeightWeightLogged[F[_]: Sync](logger: Logger)(source: String): F[ValidationResult[(Int, Int)]] =
     (for {
-      ints <- Either.catchNonFatal(source.split('x').map(_.toInt)).leftMap(e => InvalidHeightAndWeight(source))
-      dimensions <- Either.cond[ValidationError, (Int, Int)](ints.length == 2, (ints(0), ints(1)), InvalidHeightAndWeight(source))
-    } yield dimensions)
-      .toValidatedNec
+      ints <- Either.catchNonFatal(source.split('x').map(_.toInt)).leftMap(e => InvalidHeightAndWeight)
+      dimensions <- Either.cond[ValidationError, (Int, Int)](ints.length == 2, (ints(0), ints(1)), InvalidHeightAndWeight)
+    } yield dimensions).fold(
+      e => Sync[F].delay {
+        logger.error(s"Invalid height/weight format: $source")
+        e.invalidNel
+      },
+      v => Sync[F].pure(v.validNel)
+    )
 
-  private def validateGenderLogged(gender: Char): ValidationResult[Gender] = (gender match {
-    case 'M' => Either.right(Male)
-    case 'F' => Either.right(Female)
-    case _ => Either.left(InvalidGenderError(gender))
-  }).toValidatedNec
+  private def validateGenderLogged[F[_]: Sync](logger: Logger)(gender: Char): F[ValidationResult[Gender]] = {
+    (gender match {
+      case 'M' => Either.right(Male)
+      case 'F' => Either.right(Female)
+      case _ => Either.left(InvalidGenderError)
+    }).fold(
+      e => Sync[F].delay {
+        logger.error(s"Invalid gender: $gender")
+        e.invalidNel
+      },
+      v => Sync[F].pure(v.validNel)
+    )
+  }
+
 
   def build[F[_]](implicit S: Sync[F]): F[ValidationService[F]] =
     S.delay(LoggerFactory.getLogger("ValidationService")).map { logger =>
@@ -47,17 +59,16 @@ object ValidationService {
     }
 
   class ValidationServiceImpl[F[_]: Sync](logger: Logger) extends ValidationService[F] {
-    override def validateUser(name: String, age: Int, gender: Char, heightAndWeight: String): F[ValidatedNel[ValidationError, UserInformation]] = {
-      (validateAgeLogged(age), validateHeightWeight(heightAndWeight), validateGenderLogged(gender))
+    override def validateUser(name: String, age: Int, gender: Char, heightAndWeight: String): F[ValidationResult[UserInformation]] = {
+      for {
+        ageValidation <- validateAgeLogged(logger)(age)
+        genderValidation <- validateGenderLogged(logger)(gender)
+        dimensionsValidation <- validateHeightWeightLogged(logger)(heightAndWeight)
+      } yield (ageValidation, dimensionsValidation, genderValidation)
         .mapN {
-          case (validAge, (validHeight, validWeight), validGender) =>
-            UserInformation(name, validAge, validGender, validHeight, validWeight)
-        }.fold(
-          e => logErrors(logger)(e).flatMap {
-            _ => Sync[F].pure(Validated.invalid(e.toNonEmptyList))
-          },
-          v => Sync[F].pure(Validated.valid(v))
-      )
+        case (validAge, (validHeight, validWeight), validGender) =>
+          UserInformation(name, validAge, validGender, validHeight, validWeight)
+      }
     }
   }
 }

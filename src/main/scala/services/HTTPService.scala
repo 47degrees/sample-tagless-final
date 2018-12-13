@@ -17,7 +17,7 @@ trait HTTPService[F[_]] {
 
 object HTTPService {
 
-  def build[F[_]: Sync](client: HTTPClient[F]) = Sync[F].delay(LoggerFactory.getLogger("EncryptionService")).map { logger =>
+  def build[F[_]: Sync](client: HTTPClient[F]) = Sync[F].delay(LoggerFactory.getLogger("HTTPService")).map { logger =>
     new HttpServiceImpl[F](client, logger)
   }
 
