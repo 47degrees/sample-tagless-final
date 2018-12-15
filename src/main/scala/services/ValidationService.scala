@@ -29,13 +29,13 @@ object ValidationService {
           gender: Char,
           heightAndWeight: String): F[ValidatedNel[ValidationError, UserInformation]] = {
         def ageValidatedLogged: F[ValidatedNel[NotAdultError.type, Int]] =
-          if (age >= 18) S.delay(logger.debug("Age is valid")).as(validNel(age))
-          else S.delay(logger.debug("Age is invalid")).as(invalidNel(NotAdultError))
+          if (age >= 18) S.delay(logger.info("Age is valid")).as(validNel(age))
+          else S.delay(logger.error(s"Age is invalid: $age")).as(invalidNel(NotAdultError))
 
         def genderValidatedLogged: F[ValidatedNel[InvalidGenderError.type, Gender]] = gender match {
-          case 'M' => S.delay(logger.debug("Gender is valid")).as(validNel(Male))
-          case 'F' => S.delay(logger.debug("Gender is valid")).as(validNel(Female))
-          case _   => S.delay(logger.debug("Gender is invalid")).as(invalidNel(InvalidGenderError))
+          case 'M' => S.delay(logger.info("Gender is valid")).as(validNel(Male))
+          case 'F' => S.delay(logger.info("Gender is valid")).as(validNel(Female))
+          case x   => S.delay(logger.error(s"Gender is invalid: $x")).as(invalidNel(InvalidGenderError))
         }
 
         def heightAndWeightValidatedLogged: F[
@@ -44,10 +44,10 @@ object ValidationService {
 
           heightAndWeight match {
             case regex(height, weight) =>
-              S.delay(logger.debug("Height and Weight is valid"))
+              S.delay(logger.info("Height and Weight is valid"))
                 .as(validNel((height.toInt, weight.toInt)))
-            case _ =>
-              S.delay(logger.debug("Height and Weight is valid"))
+            case x =>
+              S.delay(logger.error(s"Height and Weight is invalid: $x"))
                 .as(invalidNel(InvalidHeightAndWeight))
           }
         }
